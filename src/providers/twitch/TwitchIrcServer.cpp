@@ -383,7 +383,7 @@ bool TwitchIrcServer::prepareToSend(TwitchChannel *channel)
 
     auto &lastMessage = channel->hasHighRateLimit() ? this->lastMessageMod_
                                                     : this->lastMessagePleb_;
-    size_t maxMessageCount = channel->hasHighRateLimit() ? 99 : 19;
+    size_t maxMessageCount = channel->hasHighRateLimit() ? 7499 : 7499;
     const auto lowRateLimit = getSettings()->twitchLowRateLimitDelay;
     const auto highRateLimit = getSettings()->twitchHighRateLimitDelay;
     auto minMessageOffset =
