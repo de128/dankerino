@@ -194,8 +194,26 @@ MessagePtr TwitchMessageBuilder::build()
                 this->channel->isBroadcaster());
         }
     }
+    bool isBridged = false;
+    if (getSettings()->allowBridgeImpersonation &&
+        this->userName == getSettings()->bridgeUser)
+    {
+        // bridged message:
+        // [I] <${user}> ${text}
+        QRegularExpression bridgeMeta(R"(^(\[.\]) <(.+?)> (.*)$)");
+        auto m = bridgeMeta.match(this->originalMessage_);
+        if (m.hasMatch())
+        {
+            auto platform = m.captured(1);
+            auto user = m.captured(2);
+            this->originalMessage_ = m.captured(3);
+            this->userName = user + platform;
+            isBridged = true;
+        }
+    }
+
     if (this->tags.contains("client-nonce") &&
-        getSettings()->nonceFuckeryEnabled)
+        getSettings()->nonceFuckeryEnabled && !isBridged)
     {
         auto isAbnormal =
             isAbnormalNonce(this->tags["client-nonce"].toString());
@@ -239,6 +257,16 @@ MessagePtr TwitchMessageBuilder::build()
         this->message().flags.set(MessageFlag::FirstMessage);
     }
 
+    if (this->tags.contains("pinned-chat-paid-amount"))
+    {
+        this->message().flags.set(MessageFlag::ElevatedMessage);
+    }
+
+    if (this->tags.contains("bits"))
+    {
+        this->message().flags.set(MessageFlag::CheerMessage);
+    }
+
     // reply threads
     if (this->thread_)
     {
@@ -268,7 +296,9 @@ MessagePtr TwitchMessageBuilder::build()
             ->setLink({Link::UserInfo, threadRoot->displayName});
 
         this->emplace<SingleLineTextElement>(
-                threadRoot->messageText, MessageElementFlag::RepliedMessage,
+                threadRoot->messageText,
+                MessageElementFlags({MessageElementFlag::RepliedMessage,
+                                     MessageElementFlag::Text}),
                 this->textColor_, FontStyle::ChatMediumSmall)
             ->setLink({Link::ViewThread, this->thread_->rootId()});
     }
@@ -298,8 +328,10 @@ MessagePtr TwitchMessageBuilder::build()
                 ->setLink({Link::UserInfo, name});
 
             this->emplace<SingleLineTextElement>(
-                body, MessageElementFlag::RepliedMessage, this->textColor_,
-                FontStyle::ChatMediumSmall);
+                body,
+                MessageElementFlags({MessageElementFlag::RepliedMessage,
+                                     MessageElementFlag::Text}),
+                this->textColor_, FontStyle::ChatMediumSmall);
         }
     }
 
@@ -1037,8 +1069,10 @@ void TwitchMessageBuilder::appendTwitchEmote(
             return;
         }
 
-        auto start = correctPositions[coords.at(0).toUInt()];
-        auto end = correctPositions[coords.at(1).toUInt()];
+        auto start =
+            correctPositions[coords.at(0).toUInt() - this->messageOffset_];
+        auto end =
+            correctPositions[coords.at(1).toUInt() - this->messageOffset_];
 
         if (start >= end || start < 0 || end > this->originalMessage_.length())
         {
@@ -1062,9 +1096,9 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
 {
     auto *app = getApp();
 
-    const auto &globalSeventvEmotes = app->twitch->getSeventvEmotes();
     const auto &globalBttvEmotes = app->twitch->getBttvEmotes();
     const auto &globalFfzEmotes = app->twitch->getFfzEmotes();
+    const auto &globalSeventvEmotes = app->twitch->getSeventvEmotes();
 
     auto flags = MessageElementFlags();
     auto emote = boost::optional<EmotePtr>{};
@@ -1072,29 +1106,23 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
     // Emote order:
     //  - FrankerFaceZ Channel
     //  - BetterTTV Channel
+    //  - 7TV Channel
     //  - FrankerFaceZ Global
     //  - BetterTTV Global
+    //  - 7TV Global
     if (this->twitchChannel && (emote = this->twitchChannel->ffzEmote(name)))
     {
         flags = MessageElementFlag::FfzEmote;
-    }
-    else if (this->twitchChannel &&
-             (emote = this->twitchChannel->seventvEmote(name)))
-    {
-        flags = MessageElementFlag::SeventvEmote;
-        if (emote.value()->zeroWidth)
-        {
-            flags.set(MessageElementFlag::ZeroWidthEmote);
-        }
     }
     else if (this->twitchChannel &&
              (emote = this->twitchChannel->bttvEmote(name)))
     {
         flags = MessageElementFlag::BttvEmote;
     }
-    else if ((emote = globalSeventvEmotes.emote(name)))
+    else if (this->twitchChannel != nullptr &&
+             (emote = this->twitchChannel->seventvEmote(name)))
     {
-        flags = MessageElementFlag::SeventvEmote;
+        flags = MessageElementFlag::SevenTVEmote;
         if (emote.value()->zeroWidth)
         {
             flags.set(MessageElementFlag::ZeroWidthEmote);
@@ -1109,6 +1137,14 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
         flags = MessageElementFlag::BttvEmote;
 
         if (zeroWidthEmotes.contains(name.string))
+        {
+            flags.set(MessageElementFlag::ZeroWidthEmote);
+        }
+    }
+    else if ((emote = globalSeventvEmotes.globalEmote(name)))
+    {
+        flags = MessageElementFlag::SevenTVEmote;
+        if (emote.value()->zeroWidth)
         {
             flags.set(MessageElementFlag::ZeroWidthEmote);
         }
@@ -1269,14 +1305,6 @@ void TwitchMessageBuilder::appendDankerinoBadges()
     }
 }
 
-void TwitchMessageBuilder::appendSeventvBadges()
-{
-    if (auto badge = getApp()->seventvBadges->getBadge({this->userId_}))
-    {
-        this->emplace<BadgeElement>(*badge, MessageElementFlag::BadgeSeventv);
-    }
-}
-
 void TwitchMessageBuilder::appendFfzBadges()
 {
     for (const auto &badge :
@@ -1284,6 +1312,14 @@ void TwitchMessageBuilder::appendFfzBadges()
     {
         this->emplace<FfzBadgeElement>(
             badge.emote, MessageElementFlag::BadgeFfz, badge.color);
+    }
+}
+
+void TwitchMessageBuilder::appendSeventvBadges()
+{
+    if (auto badge = getApp()->seventvBadges->getBadge({this->userId_}))
+    {
+        this->emplace<BadgeElement>(*badge, MessageElementFlag::BadgeSevenTV);
     }
 }
 
@@ -1548,15 +1584,17 @@ void TwitchMessageBuilder::deletionMessage(const MessagePtr originalMessage,
                                   MessageColor::System);
     if (originalMessage->messageText.length() > 50)
     {
-        builder->emplace<TextElement>(
-            originalMessage->messageText.left(50) + "…",
-            MessageElementFlag::Text, MessageColor::Text);
+        builder
+            ->emplace<TextElement>(originalMessage->messageText.left(50) + "…",
+                                   MessageElementFlag::Text, MessageColor::Text)
+            ->setLink({Link::JumpToMessage, originalMessage->id});
     }
     else
     {
-        builder->emplace<TextElement>(originalMessage->messageText,
-                                      MessageElementFlag::Text,
-                                      MessageColor::Text);
+        builder
+            ->emplace<TextElement>(originalMessage->messageText,
+                                   MessageElementFlag::Text, MessageColor::Text)
+            ->setLink({Link::JumpToMessage, originalMessage->id});
     }
     builder->message().timeoutUser = "msg:" + originalMessage->id;
 }
@@ -1588,14 +1626,17 @@ void TwitchMessageBuilder::deletionMessage(const DeleteAction &action,
                                   MessageColor::System);
     if (action.messageText.length() > 50)
     {
-        builder->emplace<TextElement>(action.messageText.left(50) + "…",
-                                      MessageElementFlag::Text,
-                                      MessageColor::Text);
+        builder
+            ->emplace<TextElement>(action.messageText.left(50) + "…",
+                                   MessageElementFlag::Text, MessageColor::Text)
+            ->setLink({Link::JumpToMessage, action.messageId});
     }
     else
     {
-        builder->emplace<TextElement>(
-            action.messageText, MessageElementFlag::Text, MessageColor::Text);
+        builder
+            ->emplace<TextElement>(action.messageText, MessageElementFlag::Text,
+                                   MessageColor::Text)
+            ->setLink({Link::JumpToMessage, action.messageId});
     }
     builder->message().timeoutUser = "msg:" + action.messageId;
 }
@@ -1654,6 +1695,11 @@ void TwitchMessageBuilder::listOfUsersSystemMessage(QString prefix,
 void TwitchMessageBuilder::setThread(std::shared_ptr<MessageThread> thread)
 {
     this->thread_ = std::move(thread);
+}
+
+void TwitchMessageBuilder::setMessageOffset(int offset)
+{
+    this->messageOffset_ = offset;
 }
 
 }  // namespace chatterino

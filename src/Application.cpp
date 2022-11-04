@@ -75,8 +75,8 @@ Application::Application(Settings &_settings, Paths &_paths)
     , twitch(&this->emplace<TwitchIrcServer>())
     , chatterinoBadges(&this->emplace<ChatterinoBadges>())
     , dankerinoBadges(&this->emplace<DankerinoBadges>())
-    , seventvBadges(&this->emplace<SeventvBadges>())
     , ffzBadges(&this->emplace<FfzBadges>())
+    , seventvBadges(&this->emplace<SeventvBadges>())
     , logging(&this->emplace<Logging>())
 {
     this->instance = this;
@@ -184,18 +184,36 @@ int Application::run(QApplication &qtApp)
         this->windows->forceLayoutChannelViews();
     });
 
-    getSettings()->enableBTTVGlobalEmotes.connect([this] {
-        this->twitch->reloadBTTVGlobalEmotes();
-    });
-    getSettings()->enableBTTVChannelEmotes.connect([this] {
-        this->twitch->reloadAllBTTVChannelEmotes();
-    });
-    getSettings()->enableFFZGlobalEmotes.connect([this] {
-        this->twitch->reloadFFZGlobalEmotes();
-    });
-    getSettings()->enableFFZChannelEmotes.connect([this] {
-        this->twitch->reloadAllFFZChannelEmotes();
-    });
+    getSettings()->enableBTTVGlobalEmotes.connect(
+        [this] {
+            this->twitch->reloadBTTVGlobalEmotes();
+        },
+        false);
+    getSettings()->enableBTTVChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllBTTVChannelEmotes();
+        },
+        false);
+    getSettings()->enableFFZGlobalEmotes.connect(
+        [this] {
+            this->twitch->reloadFFZGlobalEmotes();
+        },
+        false);
+    getSettings()->enableFFZChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllFFZChannelEmotes();
+        },
+        false);
+    getSettings()->enableSevenTVGlobalEmotes.connect(
+        [this] {
+            this->twitch->reloadSevenTVGlobalEmotes();
+        },
+        false);
+    getSettings()->enableSevenTVChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllSevenTVChannelEmotes();
+        },
+        false);
 
     return qtApp.exec();
 }
