@@ -8,14 +8,15 @@
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/InitUpdateButton.hpp"
-#include "widgets/Window.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/NotebookButton.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
+#include "widgets/Window.hpp"
 
+#include <boost/foreach.hpp>
 #include <QDebug>
 #include <QFile>
 #include <QFormLayout>
@@ -24,7 +25,6 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <QWidget>
-#include <boost/foreach.hpp>
 
 namespace chatterino {
 
@@ -158,30 +158,35 @@ void Notebook::select(QWidget *page, bool focusPage)
 {
     if (page == this->selectedPage_)
     {
+        // Nothing has changed
         return;
     }
 
-    if (page != nullptr)
+    if (page)
     {
-        page->setHidden(false);
+        // A new page has been selected, mark it as selected & focus one of its splits
+        auto *item = this->findItem(page);
+        if (!item)
+        {
+            return;
+        }
 
-        assert(this->containsPage(page));
-        Item &item = this->findItem(page);
+        page->show();
 
-        item.tab->setSelected(true);
-        item.tab->raise();
+        item->tab->setSelected(true);
+        item->tab->raise();
 
         if (focusPage)
         {
-            if (item.selectedWidget == nullptr)
+            if (item->selectedWidget == nullptr)
             {
-                item.page->setFocus();
+                item->page->setFocus();
             }
             else
             {
-                if (containsChild(page, item.selectedWidget))
+                if (containsChild(page, item->selectedWidget))
                 {
-                    item.selectedWidget->setFocus(Qt::MouseFocusReason);
+                    item->selectedWidget->setFocus(Qt::MouseFocusReason);
                 }
                 else
                 {
@@ -192,18 +197,18 @@ void Notebook::select(QWidget *page, bool focusPage)
         }
     }
 
-    if (this->selectedPage_ != nullptr)
+    if (this->selectedPage_)
     {
-        this->selectedPage_->setHidden(true);
+        // Hide the previously selected page
+        this->selectedPage_->hide();
 
-        Item &item = this->findItem(selectedPage_);
-        item.tab->setSelected(false);
-
-        //        for (auto split : this->selectedPage->getSplits()) {
-        //            split->updateLastReadMessage();
-        //        }
-
-        item.selectedWidget = this->selectedPage_->focusWidget();
+        auto *item = this->findItem(selectedPage_);
+        if (!item)
+        {
+            return;
+        }
+        item->tab->setSelected(false);
+        item->selectedWidget = this->selectedPage_->focusWidget();
     }
 
     this->selectedPage_ = page;
@@ -219,14 +224,17 @@ bool Notebook::containsPage(QWidget *page)
                        });
 }
 
-Notebook::Item &Notebook::findItem(QWidget *page)
+Notebook::Item *Notebook::findItem(QWidget *page)
 {
     auto it = std::find_if(this->items_.begin(), this->items_.end(),
                            [page](const auto &item) {
                                return page == item.page;
                            });
-    assert(it != this->items_.end());
-    return *it;
+    if (it != this->items_.end())
+    {
+        return &(*it);
+    }
+    return nullptr;
 }
 
 bool Notebook::containsChild(const QObject *obj, const QObject *child)
@@ -617,7 +625,7 @@ void Notebook::performLayout(bool animated)
 
         // zneix: if we were to remove buttons when tabs are hidden
         // stuff below to "set page bounds" part should be in conditional statement
-        int tabsPerColumn = (this->height() - top) / tabHeight;
+        int tabsPerColumn = (this->height() - top) / (tabHeight + tabSpacer);
         if (tabsPerColumn == 0)  // window hasn't properly rendered yet
         {
             return;
@@ -633,8 +641,8 @@ void Notebook::performLayout(bool animated)
                 bool isLastColumn = col == columnCount - 1;
                 auto largestWidth = 0;
                 int tabStart = col * tabsPerColumn;
-                int tabEnd =
-                    std::min((col + 1) * tabsPerColumn, this->items_.size());
+                int tabEnd = std::min((col + 1) * tabsPerColumn,
+                                      (int)this->items_.size());
 
                 for (int i = tabStart; i < tabEnd; i++)
                 {
@@ -719,7 +727,7 @@ void Notebook::performLayout(bool animated)
 
         // zneix: if we were to remove buttons when tabs are hidden
         // stuff below to "set page bounds" part should be in conditional statement
-        int tabsPerColumn = (this->height() - top) / tabHeight;
+        int tabsPerColumn = (this->height() - top) / (tabHeight + tabSpacer);
         if (tabsPerColumn == 0)  // window hasn't properly rendered yet
         {
             return;
@@ -735,8 +743,8 @@ void Notebook::performLayout(bool animated)
                 bool isLastColumn = col == columnCount - 1;
                 auto largestWidth = 0;
                 int tabStart = col * tabsPerColumn;
-                int tabEnd =
-                    std::min((col + 1) * tabsPerColumn, this->items_.size());
+                int tabEnd = std::min((col + 1) * tabsPerColumn,
+                                      (int)this->items_.size());
 
                 for (int i = tabStart; i < tabEnd; i++)
                 {
@@ -1162,22 +1170,29 @@ SplitContainer *SplitNotebook::getOrAddSelectedPage()
 {
     auto *selectedPage = this->getSelectedPage();
 
-    return selectedPage != nullptr ? (SplitContainer *)selectedPage
-                                   : this->addPage();
+    if (selectedPage)
+    {
+        return dynamic_cast<SplitContainer *>(selectedPage);
+    }
+
+    return this->addPage();
 }
 
 void SplitNotebook::select(QWidget *page, bool focusPage)
 {
-    if (auto selectedPage = this->getSelectedPage())
+    // If there's a previously selected page, go through its splits and
+    // update their "last read message" indicator
+    if (auto *selectedPage = this->getSelectedPage())
     {
-        if (auto splitContainer = dynamic_cast<SplitContainer *>(selectedPage))
+        if (auto *splitContainer = dynamic_cast<SplitContainer *>(selectedPage))
         {
-            for (auto split : splitContainer->getSplits())
+            for (auto *split : splitContainer->getSplits())
             {
                 split->updateLastReadMessage();
             }
         }
     }
+
     this->Notebook::select(page, focusPage);
 }
 

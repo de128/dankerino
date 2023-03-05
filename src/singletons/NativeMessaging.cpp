@@ -6,6 +6,8 @@
 #include "singletons/Paths.hpp"
 #include "util/PostToThread.hpp"
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/interprocess/ipc/message_queue.hpp>
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
@@ -13,15 +15,13 @@
 #include <QJsonObject>
 #include <QJsonValue>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/interprocess/ipc/message_queue.hpp>
-
 namespace ipc = boost::interprocess;
 
 #ifdef Q_OS_WIN
+// clang-format off
 #    include <QSettings>
-
 #    include <Windows.h>
+// clang-format on
 #    include "singletons/WindowManager.hpp"
 #    include "widgets/AttachedWindow.hpp"
 #endif
@@ -239,8 +239,11 @@ void NativeMessagingServer::ReceiverThread::handleMessage(
             postToThread([=] {
                 if (!name.isEmpty())
                 {
-                    app->twitch->watchingChannel.reset(
-                        app->twitch->getOrAddChannel(name));
+                    auto channel = app->twitch->getOrAddChannel(name);
+                    if (app->twitch->watchingChannel.get() != channel)
+                    {
+                        app->twitch->watchingChannel.reset(channel);
+                    }
                 }
 
                 if (attach || attachFullscreen)

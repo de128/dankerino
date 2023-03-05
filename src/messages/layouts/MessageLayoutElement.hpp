@@ -1,18 +1,17 @@
 #pragma once
 
+#include "common/FlagsEnum.hpp"
+#include "messages/Link.hpp"
+
+#include <boost/noncopyable.hpp>
+#include <pajlada/signals/signalholder.hpp>
 #include <QPen>
 #include <QPoint>
 #include <QRect>
 #include <QString>
-#include <boost/noncopyable.hpp>
+
 #include <climits>
-
-#include "common/FlagsEnum.hpp"
-#include "messages/Link.hpp"
-#include "messages/MessageColor.hpp"
-#include "messages/MessageElement.hpp"
-
-#include <pajlada/signals/signalholder.hpp>
+#include <cstdint>
 
 class QPainter;
 
@@ -21,6 +20,7 @@ class MessageElement;
 class Image;
 using ImagePtr = std::shared_ptr<Image>;
 enum class FontStyle : uint8_t;
+enum class MessageElementFlag : int64_t;
 
 class MessageLayoutElement : boost::noncopyable
 {
@@ -41,8 +41,8 @@ public:
     MessageLayoutElement *setLink(const Link &link_);
     MessageLayoutElement *setText(const QString &text_);
 
-    virtual void addCopyTextToString(QString &str, int from = 0,
-                                     int to = INT_MAX) const = 0;
+    virtual void addCopyTextToString(QString &str, uint32_t from = 0,
+                                     uint32_t to = UINT32_MAX) const = 0;
     virtual int getSelectionIndexCount() const = 0;
     virtual void paint(QPainter &painter) = 0;
     virtual void paintAnimated(QPainter &painter, int yOffset) = 0;
@@ -72,8 +72,8 @@ public:
                        const QSize &size);
 
 protected:
-    void addCopyTextToString(QString &str, int from = 0,
-                             int to = INT_MAX) const override;
+    void addCopyTextToString(QString &str, uint32_t from = 0,
+                             uint32_t to = UINT32_MAX) const override;
     int getSelectionIndexCount() const override;
     void paint(QPainter &painter) override;
     void paintAnimated(QPainter &painter, int yOffset) override;
@@ -124,8 +124,8 @@ public:
     void listenToLinkChanges();
 
 protected:
-    void addCopyTextToString(QString &str, int from = 0,
-                             int to = INT_MAX) const override;
+    void addCopyTextToString(QString &str, uint32_t from = 0,
+                             uint32_t to = UINT32_MAX) const override;
     int getSelectionIndexCount() const override;
     void paint(QPainter &painter) override;
     void paintAnimated(QPainter &painter, int yOffset) override;
@@ -148,8 +148,8 @@ public:
                           const QString &line2, float scale, const QSize &size);
 
 protected:
-    void addCopyTextToString(QString &str, int from = 0,
-                             int to = INT_MAX) const override;
+    void addCopyTextToString(QString &str, uint32_t from = 0,
+                             uint32_t to = UINT32_MAX) const override;
     int getSelectionIndexCount() const override;
     void paint(QPainter &painter) override;
     void paintAnimated(QPainter &painter, int yOffset) override;
@@ -173,8 +173,8 @@ protected:
     void paintAnimated(QPainter &painter, int yOffset) override;
     int getMouseOverIndex(const QPoint &abs) const override;
     int getXFromIndex(int index) override;
-    void addCopyTextToString(QString &str, int from = 0,
-                             int to = INT_MAX) const override;
+    void addCopyTextToString(QString &str, uint32_t from = 0,
+                             uint32_t to = UINT32_MAX) const override;
     int getSelectionIndexCount() const override;
 
 private:

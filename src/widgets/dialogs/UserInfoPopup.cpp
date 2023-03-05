@@ -3,16 +3,20 @@
 #include "Application.hpp"
 #include "common/Channel.hpp"
 #include "common/NetworkRequest.hpp"
+#include "common/NetworkResult.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/commands/CommandController.hpp"
 #include "controllers/highlights/HighlightBlacklistUser.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "providers/IvrApi.hpp"
+#include "providers/twitch/api/Helix.hpp"
+#include "providers/twitch/ChannelPointReward.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
-#include "providers/twitch/api/Helix.hpp"
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
@@ -20,18 +24,18 @@
 #include "util/Clipboard.hpp"
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
-#include "util/PostToThread.hpp"
 #include "util/StreamerMode.hpp"
-#include "widgets/Label.hpp"
-#include "widgets/Scrollbar.hpp"
-#include "widgets/Window.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/EffectLabel.hpp"
 #include "widgets/helper/Line.hpp"
+#include "widgets/Label.hpp"
+#include "widgets/Scrollbar.hpp"
 #include "widgets/splits/Split.hpp"
+#include "widgets/Window.hpp"
 
 #include <QCheckBox>
 #include <QDesktopServices>
+#include <QFile>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -222,6 +226,10 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, QWidget *parent,
                            .arg(this->userName_)
                            .arg(calculateTimeoutDuration(button));
              }
+
+             msg = getApp()->commands->execCommand(
+                 msg, this->underlyingChannel_, false);
+
              this->underlyingChannel_->sendMessage(msg);
              return "";
          }},
@@ -312,7 +320,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, QWidget *parent,
                                 SplitContainer *container = nb.addPage(true);
                                 Split *split = new Split(container);
                                 split->setChannel(channel);
-                                container->appendSplit(split);
+                                container->insertSplit(split);
                             });
                         menu->popup(QCursor::pos());
                         menu->raise();
@@ -417,16 +425,28 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, QWidget *parent,
         });
 
         QObject::connect(mod.getElement(), &Button::leftClicked, [this] {
-            this->underlyingChannel_->sendMessage("/mod " + this->userName_);
+            QString value = "/mod " + this->userName_;
+            value = getApp()->commands->execCommand(
+                value, this->underlyingChannel_, false);
+            this->underlyingChannel_->sendMessage(value);
         });
         QObject::connect(unmod.getElement(), &Button::leftClicked, [this] {
-            this->underlyingChannel_->sendMessage("/unmod " + this->userName_);
+            QString value = "/unmod " + this->userName_;
+            value = getApp()->commands->execCommand(
+                value, this->underlyingChannel_, false);
+            this->underlyingChannel_->sendMessage(value);
         });
         QObject::connect(vip.getElement(), &Button::leftClicked, [this] {
-            this->underlyingChannel_->sendMessage("/vip " + this->userName_);
+            QString value = "/vip " + this->userName_;
+            value = getApp()->commands->execCommand(
+                value, this->underlyingChannel_, false);
+            this->underlyingChannel_->sendMessage(value);
         });
         QObject::connect(unvip.getElement(), &Button::leftClicked, [this] {
-            this->underlyingChannel_->sendMessage("/unvip " + this->userName_);
+            QString value = "/unvip " + this->userName_;
+            value = getApp()->commands->execCommand(
+                value, this->underlyingChannel_, false);
+            this->underlyingChannel_->sendMessage(value);
         });
 
         QObject::connect(checkAfk.getElement(), &Button::leftClicked, [this] {
@@ -556,25 +576,35 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, QWidget *parent,
                 case TimeoutWidget::Ban: {
                     if (this->underlyingChannel_)
                     {
-                        this->underlyingChannel_->sendMessage("/ban " +
-                                                              this->userName_);
+                        QString value = "/ban " + this->userName_;
+                        value = getApp()->commands->execCommand(
+                            value, this->underlyingChannel_, false);
+
+                        this->underlyingChannel_->sendMessage(value);
                     }
                 }
                 break;
                 case TimeoutWidget::Unban: {
                     if (this->underlyingChannel_)
                     {
-                        this->underlyingChannel_->sendMessage("/unban " +
-                                                              this->userName_);
+                        QString value = "/unban " + this->userName_;
+                        value = getApp()->commands->execCommand(
+                            value, this->underlyingChannel_, false);
+
+                        this->underlyingChannel_->sendMessage(value);
                     }
                 }
                 break;
                 case TimeoutWidget::Timeout: {
                     if (this->underlyingChannel_)
                     {
-                        this->underlyingChannel_->sendMessage(
-                            "/timeout " + this->userName_ + " " +
-                            QString::number(arg));
+                        QString value = "/timeout " + this->userName_ + " " +
+                                        QString::number(arg);
+
+                        value = getApp()->commands->execCommand(
+                            value, this->underlyingChannel_, false);
+
+                        this->underlyingChannel_->sendMessage(value);
                     }
                 }
                 break;
@@ -1013,7 +1043,7 @@ void UserInfoPopup::loadAvatar(const HelixUser &user)
         static auto manager = new QNetworkAccessManager();
         auto *reply = manager->get(req);
 
-        QObject::connect(reply, &QNetworkReply::finished, this, [=] {
+        QObject::connect(reply, &QNetworkReply::finished, this, [=, this] {
             if (reply->error() == QNetworkReply::NoError)
             {
                 auto data = reply->readAll();
@@ -1046,7 +1076,7 @@ void UserInfoPopup::fetchSevenTVAvatar(const HelixUser &user)
     NetworkRequest(SEVENTV_USER_API.arg(user.login))
         .timeout(20000)
         .header("Content-Type", "application/json")
-        .onSuccess([=](NetworkResult result) -> Outcome {
+        .onSuccess([=, this](const NetworkResult &result) -> Outcome {
             auto root = result.parseJson();
             auto id = root.value(QStringLiteral("id")).toString();
             auto profile_picture_id =
@@ -1059,11 +1089,13 @@ void UserInfoPopup::fetchSevenTVAvatar(const HelixUser &user)
 
                 NetworkRequest(URI)
                     .timeout(20000)
-                    .onSuccess([=](NetworkResult outcome) -> Outcome {
+                    .onSuccess([=,
+                                this](const NetworkResult &outcome) -> Outcome {
                         auto data = outcome.getData();
                         QCryptographicHash hash(
                             QCryptographicHash::Algorithm::Sha1);
-                        auto SHA = QString(data.size()).toUtf8();
+                        auto SHA = QString(QChar(static_cast<int>(data.size())))
+                                       .toUtf8();
                         hash.addData(SHA.data(), SHA.size() + 1);
 
                         auto filename =
@@ -1092,7 +1124,7 @@ void UserInfoPopup::setSevenTVAvatar(const QString &filename)
     }
     else
     {
-        QObject::connect(movie, &QMovie::frameChanged, this, [=] {
+        QObject::connect(movie, &QMovie::frameChanged, this, [=, this] {
             this->ui_.avatarButton->setPixmap(movie->currentPixmap());
         });
         movie->start();

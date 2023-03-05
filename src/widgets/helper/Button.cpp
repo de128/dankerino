@@ -1,13 +1,13 @@
 #include "Button.hpp"
 
-#include <QApplication>
-#include <QDebug>
-#include <QDesktopWidget>
-#include <QPainter>
-#include <QPalette>
-
 #include "singletons/Theme.hpp"
 #include "util/FunctionEventFilter.hpp"
+
+#include <QApplication>
+#include <QDebug>
+#include <QPainter>
+//#include <QPalette>
+#include <QScreen>
 
 namespace chatterino {
 namespace {
@@ -220,7 +220,11 @@ void Button::fancyPaint(QPainter &painter)
     }
 }
 
-void Button::enterEvent(QEvent *)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+void Button::enterEvent(QEnterEvent * /*event*/)
+#else
+void Button::enterEvent(QEvent * /*event*/)
+#endif
 {
     this->mouseOver_ = true;
 }
@@ -348,10 +352,15 @@ void Button::showMenu()
         return;
 
     auto point = [this] {
-        auto bounds = QApplication::desktop()->availableGeometry(this);
-
         auto point = this->mapToGlobal(
             QPoint(this->width() - this->menu_->width(), this->height()));
+
+        auto *screen = QApplication::screenAt(point);
+        if (screen == nullptr)
+        {
+            screen = QApplication::primaryScreen();
+        }
+        auto bounds = screen->availableGeometry();
 
         if (point.y() + this->menu_->height() > bounds.bottom())
         {

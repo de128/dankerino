@@ -2,9 +2,12 @@
 
 #include "Application.hpp"
 #include "debug/Benchmark.hpp"
+#include "messages/layouts/MessageLayoutContainer.hpp"
+#include "messages/layouts/MessageLayoutElement.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
-#include "messages/layouts/MessageLayoutContainer.hpp"
+#include "messages/Selection.hpp"
+#include "providers/colors/ColorProvider.hpp"
 #include "singletons/Emotes.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
@@ -15,8 +18,8 @@
 #include <QApplication>
 #include <QDebug>
 #include <QPainter>
-#include <QThread>
 #include <QtGlobal>
+#include <QThread>
 
 #define MARGIN_LEFT (int)(8 * this->scale)
 #define MARGIN_RIGHT (int)(8 * this->scale)
@@ -274,7 +277,7 @@ void MessageLayout::paint(QPainter &painter, int width, int y, int messageIndex,
     if (isLastReadMessage)
     {
         QColor color;
-        if (getSettings()->lastMessageColor != "")
+        if (getSettings()->lastMessageColor != QStringLiteral(""))
         {
             color = QColor(getSettings()->lastMessageColor.getValue());
         }
@@ -449,7 +452,7 @@ int MessageLayout::getSelectionIndex(QPoint position)
     return this->container_->getSelectionIndex(position);
 }
 
-void MessageLayout::addSelectionText(QString &str, int from, int to,
+void MessageLayout::addSelectionText(QString &str, uint32_t from, uint32_t to,
                                      CopyMode copymode)
 {
     this->container_->addSelectionText(str, from, to, copymode);

@@ -1,26 +1,20 @@
 #pragma once
 
-#include "Application.hpp"
 #include "common/Aliases.hpp"
 #include "common/Atomic.hpp"
 #include "common/Channel.hpp"
 #include "common/ChannelChatters.hpp"
-#include "common/ChatterSet.hpp"
 #include "common/Outcome.hpp"
 #include "common/UniqueAccess.hpp"
-#include "messages/MessageThread.hpp"
-#include "providers/seventv/eventapi/SeventvEventAPIDispatch.hpp"
-#include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
-#include "providers/twitch/api/Helix.hpp"
 #include "util/QStringHash.hpp"
 
-#include <QColor>
-#include <QElapsedTimer>
-#include <QRegularExpression>
 #include <boost/optional.hpp>
 #include <boost/signals2.hpp>
 #include <pajlada/signals/signalholder.hpp>
+#include <QColor>
+#include <QElapsedTimer>
+#include <QRegularExpression>
 
 #include <atomic>
 #include <mutex>
@@ -28,8 +22,10 @@
 
 namespace chatterino {
 
-// This is to make sure that combined emoji go through properly, see
-// https://github.com/Chatterino/chatterino2/issues/3384 and
+// This is for compatibility with older Chatterino versions. Twitch didn't use
+// to allow ZERO WIDTH JOINER unicode character, so Chatterino used ESCAPE_TAG
+// instead.
+// See https://github.com/Chatterino/chatterino2/issues/3384 and
 // https://mm2pl.github.io/emoji_rfc.pdf for more details
 const QString ZERO_WIDTH_JOINER = QString(QChar(0x200D));
 
@@ -54,7 +50,21 @@ class TwitchBadges;
 class SeventvEmotes;
 class FfzEmotes;
 class BttvEmotes;
+struct BttvLiveUpdateEmoteUpdateAddMessage;
+struct BttvLiveUpdateEmoteRemoveMessage;
+
 class SeventvEmotes;
+namespace seventv::eventapi {
+    struct EmoteAddDispatch;
+    struct EmoteUpdateDispatch;
+    struct EmoteRemoveDispatch;
+    struct UserConnectionUpdateDispatch;
+}  // namespace seventv::eventapi
+
+struct ChannelPointReward;
+class MessageThread;
+struct CheerEmoteSet;
+struct HelixStream;
 
 class TwitchIrcServer;
 
@@ -76,11 +86,26 @@ public:
         bool submode = false;
         bool r9k = false;
         bool emoteOnly = false;
+
+        /**
+         * @brief Number of minutes required for users to be followed before typing in chat
+         *
+         * Special cases:
+         * -1 = follower mode off
+         *  0 = follower mode on, no time requirement
+         **/
         int followerOnly = -1;
+
+        /**
+         * @brief Number of seconds required to wait before typing emotes
+         *
+         * 0 = slow mode off
+         **/
         int slowMode = 0;
     };
 
     explicit TwitchChannel(const QString &channelName);
+    ~TwitchChannel() override;
 
     void initialize();
 
@@ -124,15 +149,24 @@ public:
     const QString &seventvUserID() const;
     const QString &seventvEmoteSetID() const;
 
+    /** Adds a BTTV channel emote to this channel. */
+    void addBttvEmote(const BttvLiveUpdateEmoteUpdateAddMessage &message);
+    /** Updates a BTTV channel emote in this channel. */
+    void updateBttvEmote(const BttvLiveUpdateEmoteUpdateAddMessage &message);
+    /** Removes a BTTV channel emote from this channel. */
+    void removeBttvEmote(const BttvLiveUpdateEmoteRemoveMessage &message);
+
     /** Adds a 7TV channel emote to this channel. */
-    void addSeventvEmote(const SeventvEventAPIEmoteAddDispatch &dispatch);
+    void addSeventvEmote(const seventv::eventapi::EmoteAddDispatch &dispatch);
     /** Updates a 7TV channel emote's name in this channel */
-    void updateSeventvEmote(const SeventvEventAPIEmoteUpdateDispatch &dispatch);
+    void updateSeventvEmote(
+        const seventv::eventapi::EmoteUpdateDispatch &dispatch);
     /** Removes a 7TV channel emote from this channel */
-    void removeSeventvEmote(const SeventvEventAPIEmoteRemoveDispatch &dispatch);
+    void removeSeventvEmote(
+        const seventv::eventapi::EmoteRemoveDispatch &dispatch);
     /** Updates the current 7TV user. Currently, only the emote-set is updated. */
     void updateSeventvUser(
-        const SeventvEventAPIUserConnectionUpdateDispatch &dispatch);
+        const seventv::eventapi::UserConnectionUpdateDispatch &dispatch);
 
     // Update the channel's 7TV information (the channel's 7TV user ID and emote set ID)
     void updateSeventvData(const QString &newUserID,
@@ -191,6 +225,8 @@ private:
     void fetchDisplayName();
     void cleanUpReplyThreads();
     void showLoginMessage();
+    /** Joins (subscribes to) a Twitch channel for updates on BTTV. */
+    void joinBttvChannel() const;
 
     void setLive(bool newLiveStatus);
     void setMod(bool value);

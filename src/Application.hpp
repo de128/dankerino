@@ -1,11 +1,11 @@
 #pragma once
 
-#include <QApplication>
-#include <memory>
-
-#include "common/SignalVector.hpp"
 #include "common/Singleton.hpp"
 #include "singletons/NativeMessaging.hpp"
+
+#include <QApplication>
+
+#include <memory>
 
 namespace chatterino {
 
@@ -19,12 +19,12 @@ class HighlightController;
 class HotkeyController;
 class IUserDataController;
 class UserDataController;
+class SoundController;
 
 class Theme;
 class WindowManager;
 class Logging;
 class Paths;
-class AccountManager;
 class Emotes;
 class IEmotes;
 class Settings;
@@ -95,6 +95,7 @@ public:
     FfzBadges *const ffzBadges{};
     SeventvBadges *const seventvBadges{};
     UserDataController *const userData{};
+    SoundController *const sound{};
 
     /*[[deprecated]]*/ Logging *const logging{};
 
@@ -152,6 +153,7 @@ public:
 private:
     void addSingleton(Singleton *singleton);
     void initPubSub();
+    void initBttvLiveUpdates();
     void initSeventvEventAPI();
     void initNm(Paths &paths);
 

@@ -1,13 +1,11 @@
 #include "LoggingChannel.hpp"
 
-#include "Application.hpp"
 #include "common/QLogging.hpp"
+#include "messages/Message.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
 
 #include <QDir>
-
-#include <ctime>
 
 namespace chatterino {
 
@@ -97,6 +95,11 @@ void LoggingChannel::addMessage(MessagePtr message)
     }
 
     QString str;
+    if (channelName.startsWith("/mentions"))
+    {
+        str.append("#" + message->channelName + " ");
+    }
+
     str.append('[');
     str.append(now.toString("HH:mm:ss"));
     str.append("] ");

@@ -1,21 +1,18 @@
 #pragma once
 
 #include "common/Common.hpp"
-#include "widgets/BaseWidget.hpp"
-#include "widgets/Notebook.hpp"
 #include "widgets/helper/Button.hpp"
+#include "widgets/Notebook.hpp"
 
-#include <QMenu>
-#include <QPropertyAnimation>
 #include <pajlada/settings/setting.hpp>
 #include <pajlada/signals/signalholder.hpp>
+#include <QMenu>
+#include <QPropertyAnimation>
 
 namespace chatterino {
 
 #define NOTEBOOK_TAB_HEIGHT 28
 
-// class Notebook;
-class Notebook;
 class SplitContainer;
 
 class NotebookTab : public Button
@@ -64,7 +61,11 @@ protected:
     virtual void mousePressEvent(QMouseEvent *event) override;
     virtual void mouseReleaseEvent(QMouseEvent *event) override;
     virtual void mouseDoubleClickEvent(QMouseEvent *event) override;
-    virtual void enterEvent(QEvent *) override;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    void enterEvent(QEnterEvent *event) override;
+#else
+    void enterEvent(QEvent *event) override;
+#endif
     virtual void leaveEvent(QEvent *) override;
 
     virtual void dragEnterEvent(QDragEnterEvent *event) override;
