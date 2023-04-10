@@ -10,6 +10,9 @@
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/notifications/NotificationController.hpp"
+#ifdef CHATTERINO_HAVE_PLUGINS
+#    include "controllers/plugins/PluginController.hpp"
+#endif
 #include "controllers/sound/SoundController.hpp"
 #include "controllers/userdata/UserDataController.hpp"
 #include "debug/AssertInGuiThread.hpp"
@@ -17,7 +20,6 @@
 #include "messages/MessageBuilder.hpp"
 #include "providers/bttv/BttvLiveUpdates.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
-#include "providers/dankerino/DankerinoBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/irc/Irc2.hpp"
 #include "providers/seventv/eventapi/Dispatch.hpp"
@@ -82,11 +84,13 @@ Application::Application(Settings &_settings, Paths &_paths)
     , highlights(&this->emplace<HighlightController>())
     , twitch(&this->emplace<TwitchIrcServer>())
     , chatterinoBadges(&this->emplace<ChatterinoBadges>())
-    , dankerinoBadges(&this->emplace<DankerinoBadges>())
     , ffzBadges(&this->emplace<FfzBadges>())
     , seventvBadges(&this->emplace<SeventvBadges>())
     , userData(&this->emplace<UserDataController>())
     , sound(&this->emplace<SoundController>())
+#ifdef CHATTERINO_HAVE_PLUGINS
+    , plugins(&this->emplace<PluginController>())
+#endif
     , logging(&this->emplace<Logging>())
 {
     this->instance = this;

@@ -20,6 +20,9 @@ class HotkeyController;
 class IUserDataController;
 class UserDataController;
 class SoundController;
+#ifdef CHATTERINO_HAVE_PLUGINS
+class PluginController;
+#endif
 
 class Theme;
 class WindowManager;
@@ -31,7 +34,6 @@ class Settings;
 class Fonts;
 class Toasts;
 class ChatterinoBadges;
-class DankerinoBadges;
 class FfzBadges;
 class SeventvBadges;
 
@@ -91,11 +93,14 @@ public:
     HighlightController *const highlights{};
     TwitchIrcServer *const twitch{};
     ChatterinoBadges *const chatterinoBadges{};
-    DankerinoBadges *const dankerinoBadges{};
     FfzBadges *const ffzBadges{};
     SeventvBadges *const seventvBadges{};
     UserDataController *const userData{};
     SoundController *const sound{};
+
+#ifdef CHATTERINO_HAVE_PLUGINS
+    PluginController *const plugins{};
+#endif
 
     /*[[deprecated]]*/ Logging *const logging{};
 
