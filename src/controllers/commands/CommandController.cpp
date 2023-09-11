@@ -650,7 +650,7 @@ void CommandController::initialize(Settings &, Paths &paths)
             target,
             [currentUser, channel, target](const HelixUser &targetUser) {
                 getApp()->accounts->twitch.getCurrent()->blockUser(
-                    targetUser.id,
+                    targetUser.id, nullptr,
                     [channel, target, targetUser] {
                         channel->addMessage(makeSystemMessage(
                             QString("You successfully blocked user %1")
@@ -703,7 +703,7 @@ void CommandController::initialize(Settings &, Paths &paths)
             target,
             [currentUser, channel, target](const auto &targetUser) {
                 getApp()->accounts->twitch.getCurrent()->unblockUser(
-                    targetUser.id,
+                    targetUser.id, nullptr,
                     [channel, target, targetUser] {
                         channel->addMessage(makeSystemMessage(
                             QString("You successfully unblocked user %1")
@@ -923,7 +923,8 @@ void CommandController::initialize(Settings &, Paths &paths)
             static_cast<QWidget *>(&(getApp()->windows->getMainWindow())),
             currentSplit);
         userPopup->setData(userName, channel);
-        userPopup->move(QCursor::pos());
+        userPopup->moveTo(QCursor::pos(), false,
+                          BaseWindow::BoundsChecker::CursorPosition);
         userPopup->show();
         return "";
     });
@@ -3241,6 +3242,7 @@ void CommandController::initialize(Settings &, Paths &paths)
     this->registerCommand("/shoutout", &commands::sendShoutout);
 
     this->registerCommand("/c2-set-logging-rules", &commands::setLoggingRules);
+    this->registerCommand("/c2-theme-autoreload", &commands::toggleThemeReload);
 }
 
 void CommandController::save()
