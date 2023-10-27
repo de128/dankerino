@@ -15,11 +15,11 @@ if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
     # for example when updating from nightly to stable.
-    Write-Output "" > Chatterino2/modes;
+    Write-Output "" | Out-File Chatterino2/modes -Encoding ASCII;
     $installerBaseName = "Chatterino.Installer";
 }
 else {
-    Write-Output nightly > Chatterino2/modes;
+    Write-Output nightly | Out-File Chatterino2/modes -Encoding ASCII;
     $defines = "/DIS_NIGHTLY=1";
     $installerBaseName = "Chatterino.Nightly.Installer";
 }
@@ -36,10 +36,14 @@ if ($null -eq $Env:VCToolsRedistDir) {
 }
 Copy-Item "$Env:VCToolsRedistDir\vc_redist.x64.exe" .;
 
+$VCRTVersion = (Get-Item "$Env:VCToolsRedistDir\vc_redist.x64.exe").VersionInfo;
+
 # Build the installer
 ISCC `
     /DWORKING_DIR="$($pwd.Path)\" `
     /DINSTALLER_BASE_NAME="$installerBaseName" `
+    /DSHIPPED_VCRT_BUILD="$($VCRTVersion.FileBuildPart)" `
+    /DSHIPPED_VCRT_VERSION="$($VCRTVersion.FileDescription)" `
     $defines `
     /O. `
     "$PSScriptRoot\chatterino-installer.iss";
