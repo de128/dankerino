@@ -8,6 +8,8 @@
 #include "controllers/ignores/IgnorePhrase.hpp"
 #include "controllers/moderationactions/ModerationAction.hpp"
 #include "controllers/nicknames/Nickname.hpp"
+#include "debug/Benchmark.hpp"
+#include "pajlada/settings/signalargs.hpp"
 #include "util/Clamp.hpp"
 #include "util/PersistSignalVector.hpp"
 #include "util/WindowsHelper.hpp"
@@ -54,7 +56,9 @@ bool Settings::isHighlightedUser(const QString &username)
     for (const auto &highlightedUser : *items)
     {
         if (highlightedUser.isMatch(username))
+        {
             return true;
+        }
     }
 
     return false;
@@ -67,7 +71,9 @@ bool Settings::isBlacklistedUser(const QString &username)
     for (const auto &blacklistedUser : *items)
     {
         if (blacklistedUser.isMatch(username))
+        {
             return true;
+        }
     }
 
     return false;
@@ -137,6 +143,7 @@ bool Settings::toggleMutedChannel(const QString &channelName)
 Settings *Settings::instance_ = nullptr;
 
 Settings::Settings(const QString &settingsDirectory)
+    : prevInstance_(Settings::instance_)
 {
     QString settingsPath = settingsDirectory + "/settings.json";
 
@@ -182,11 +189,6 @@ Settings::Settings(const QString &settingsDirectory)
         },
         false);
 #endif
-    this->enableStreamerMode.connect(
-        []() {
-            getApp()->streamerModeChanged.invoke();
-        },
-        false);
 }
 void Settings::moveLegacyDankerinoSettings_()
 {
@@ -203,10 +205,15 @@ void Settings::moveLegacyDankerinoSettings_()
     }
 }
 
-Settings::~Settings() = default;
+Settings::~Settings()
+{
+    Settings::instance_ = this->prevInstance_;
+}
 
 void Settings::saveSnapshot()
 {
+    BenchmarkGuard benchmark("Settings::saveSnapshot");
+
     rapidjson::Document *d = new rapidjson::Document(rapidjson::kObjectType);
     rapidjson::Document::AllocatorType &a = d->GetAllocator();
 
@@ -219,7 +226,7 @@ void Settings::saveSnapshot()
         }
 
         rapidjson::Value key(setting->getPath().c_str(), a);
-        auto curVal = setting->unmarshalJSON();
+        auto *curVal = setting->unmarshalJSON();
         if (curVal == nullptr)
         {
             continue;
@@ -241,6 +248,8 @@ void Settings::restoreSnapshot()
     {
         return;
     }
+
+    BenchmarkGuard benchmark("Settings::restoreSnapshot");
 
     const auto &snapshot = *(this->snapshot_.get());
 
@@ -264,7 +273,10 @@ void Settings::restoreSnapshot()
             continue;
         }
 
-        setting->marshalJSON(snapshot[path]);
+        pajlada::Settings::SignalArgs args;
+        args.compareBeforeSet = true;
+
+        setting->marshalJSON(snapshot[path], std::move(args));
     }
 }
 

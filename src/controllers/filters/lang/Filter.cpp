@@ -44,9 +44,15 @@ ContextMap buildContextMap(const MessagePtr &m, chatterino::Channel *channel)
      * flags.whisper
      * flags.reply
      * flags.automod
+     * flags.restricted
+     * flags.monitored
      *
      * message.content
      * message.length
+     *
+     * reward.title
+     * reward.cost
+     * reward.id
      *
      * dankerino:
      * flags.webchat_detected
@@ -91,6 +97,7 @@ ContextMap buildContextMap(const MessagePtr &m, chatterino::Channel *channel)
         {"channel.name", m->channelName},
         {"channel.watching", watching},
 
+        {"flags.action", m->flags.has(MessageFlag::Action)},
         {"flags.highlighted", m->flags.has(MessageFlag::Highlighted)},
         {"flags.points_redeemed", m->flags.has(MessageFlag::RedeemedHighlight)},
         {"flags.sub_message", m->flags.has(MessageFlag::Subscription)},
@@ -104,6 +111,8 @@ ContextMap buildContextMap(const MessagePtr &m, chatterino::Channel *channel)
         {"flags.whisper", m->flags.has(MessageFlag::Whisper)},
         {"flags.reply", m->flags.has(MessageFlag::ReplyMessage)},
         {"flags.automod", m->flags.has(MessageFlag::AutoMod)},
+        {"flags.restricted", m->flags.has(MessageFlag::RestrictedMessage)},
+        {"flags.monitored", m->flags.has(MessageFlag::MonitoredMessage)},
 
         {"message.content", m->messageText},
         {"message.length", m->messageText.length()},
@@ -120,6 +129,18 @@ ContextMap buildContextMap(const MessagePtr &m, chatterino::Channel *channel)
         {
             vars["channel.live"] = false;
         }
+    }
+    if (m->reward != nullptr)
+    {
+        vars["reward.title"] = m->reward->title;
+        vars["reward.cost"] = m->reward->cost;
+        vars["reward.id"] = m->reward->id;
+    }
+    else
+    {
+        vars["reward.title"] = "";
+        vars["reward.cost"] = -1;
+        vars["reward.id"] = "";
     }
     return vars;
 }

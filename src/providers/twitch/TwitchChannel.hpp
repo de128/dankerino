@@ -4,12 +4,17 @@
 #include "common/Atomic.hpp"
 #include "common/Channel.hpp"
 #include "common/ChannelChatters.hpp"
-#include "common/Outcome.hpp"
+#include "common/Common.hpp"
 #include "common/UniqueAccess.hpp"
+#include "providers/ffz/FfzBadges.hpp"
+#include "providers/ffz/FfzEmotes.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
 #include "util/QStringHash.hpp"
+#include "util/ThreadGuard.hpp"
 
+#include <boost/circular_buffer/space_optimized.hpp>
 #include <boost/signals2.hpp>
+#include <IrcMessage>
 #include <pajlada/signals/signalholder.hpp>
 #include <QColor>
 #include <QElapsedTimer>
@@ -68,6 +73,8 @@ struct HelixStream;
 
 class TwitchIrcServer;
 
+const int MAX_QUEUED_REDEMPTIONS = 16;
+
 class TwitchChannel final : public Channel, public ChannelChatters
 {
 public:
@@ -79,7 +86,9 @@ public:
         QString game;
         QString gameId;
         QString uptime;
+        int uptimeSeconds = 0;
         QString streamType;
+        QString streamId;
     };
 
     struct RoomModes {
@@ -107,6 +116,11 @@ public:
     explicit TwitchChannel(const QString &channelName);
     ~TwitchChannel() override;
 
+    TwitchChannel(const TwitchChannel &) = delete;
+    TwitchChannel(TwitchChannel &&) = delete;
+    TwitchChannel &operator=(const TwitchChannel &) = delete;
+    TwitchChannel &operator=(TwitchChannel &&) = delete;
+
     void initialize();
 
     // Channel methods
@@ -121,17 +135,29 @@ public:
     bool hasHighRateLimit() const override;
     bool canReconnect() const override;
     void reconnect() override;
+    QString getCurrentStreamID() const override;
     void createClip();
 
     // Data
     const QString &subscriptionUrl();
     const QString &channelUrl();
     const QString &popoutPlayerUrl();
-    int chatterCount();
+    int chatterCount() const;
     bool isLive() const override;
+    bool isRerun() const override;
     QString roomId() const;
     SharedAccessGuard<const RoomModes> accessRoomModes() const;
     SharedAccessGuard<const StreamStatus> accessStreamStatus() const;
+
+    /**
+     * Records that the channel is no longer joined.
+     */
+    void markDisconnected();
+
+    /**
+     * Records that the channel's read connection is healthy.
+     */
+    void markConnected();
 
     // Emotes
     std::optional<EmotePtr> bttvEmote(const EmoteName &name) const;
@@ -144,6 +170,10 @@ public:
     void refreshBTTVChannelEmotes(bool manualRefresh);
     void refreshFFZChannelEmotes(bool manualRefresh);
     void refreshSevenTVChannelEmotes(bool manualRefresh);
+
+    void setBttvEmotes(std::shared_ptr<const EmoteMap> &&map);
+    void setFfzEmotes(std::shared_ptr<const EmoteMap> &&map);
+    void setSeventvEmotes(std::shared_ptr<const EmoteMap> &&map);
 
     const QString &seventvUserID() const;
     const QString &seventvEmoteSetID() const;
@@ -176,6 +206,10 @@ public:
     std::optional<EmotePtr> ffzCustomVipBadge() const;
     std::optional<EmotePtr> twitchBadge(const QString &set,
                                         const QString &version) const;
+    /**
+     * Returns a list of channel-specific FrankerFaceZ badges for the given user
+     */
+    std::vector<FfzBadges::Badge> ffzChannelBadges(const QString &userID) const;
 
     // Cheers
     std::optional<CheerEmote> cheerEmote(const QString &string);
@@ -190,6 +224,17 @@ public:
     void addReplyThread(const std::shared_ptr<MessageThread> &thread);
     const std::unordered_map<QString, std::weak_ptr<MessageThread>> &threads()
         const;
+
+    /**
+     * Get the thread for the given message
+     * If no thread can be found for the message, create one
+     */
+    std::shared_ptr<MessageThread> getOrCreateThread(const MessagePtr &message);
+
+    /**
+     * This signal fires when the local user has joined the channel
+     **/
+    pajlada::Signals::NoArgSignal joined;
 
     // Only TwitchChannel may invoke this signal
     pajlada::Signals::NoArgSignal userStateChanged;
@@ -213,8 +258,13 @@ public:
     pajlada::Signals::NoArgSignal roomModesChanged;
 
     // Channel point rewards
-    pajlada::Signals::SelfDisconnectingSignal<ChannelPointReward>
-        channelPointRewardAdded;
+    void addQueuedRedemption(const QString &rewardId,
+                             const QString &originalContent,
+                             Communi::IrcMessage *message);
+    /**
+     * A rich & hydrated redemption from PubSub has arrived, add it to the channel.
+     * This will look at queued up partial messages, and if one is found it will add the queued up partial messages fully hydrated.
+     **/
     void addChannelPointReward(const ChannelPointReward &reward);
     bool isChannelPointRewardKnown(const QString &rewardId);
     std::optional<ChannelPointReward> channelPointReward(
@@ -224,6 +274,12 @@ public:
     void updateStreamStatus(const std::optional<HelixStream> &helixStream);
     void updateStreamTitle(const QString &title);
 
+    /**
+     * Returns the display name of the user
+     *
+     * If the display name contained chinese, japenese, or korean characters, the user's login name is returned instead
+     **/
+    const QString &getDisplayName() const override;
     void updateDisplayName(const QString &displayName);
 
 private:
@@ -240,6 +296,12 @@ private:
         // actualDisplayName is the raw display name string received from Twitch
         QString actualDisplayName;
     } nameOptions;
+
+    struct QueuedRedemption {
+        QString rewardID;
+        QString originalContent;
+        QObjectPtr<Communi::IrcMessage> message;
+    };
 
     void refreshPubSub();
     void refreshChatters();
@@ -261,7 +323,7 @@ private:
      * This is done at most once every 60s.
      */
     void updateSevenTVActivity();
-    void listenSevenTVCosmetics();
+    void listenSevenTVCosmetics() const;
 
     /**
      * @brief Sets the live status of this Twitch channel
@@ -273,16 +335,9 @@ private:
     void setVIP(bool value);
     void setStaff(bool value);
     void setRoomId(const QString &id);
-    void setRoomModes(const RoomModes &roomModes_);
+    void setRoomModes(const RoomModes &newRoomModes);
     void setDisplayName(const QString &name);
     void setLocalizedName(const QString &name);
-
-    /**
-     * Returns the display name of the user
-     *
-     * If the display name contained chinese, japenese, or korean characters, the user's login name is returned instead
-     **/
-    const QString &getDisplayName() const override;
 
     /**
      * Returns the localized name of the user
@@ -332,7 +387,10 @@ private:
     const QString popoutPlayerUrl_;
     int chatterCount_{};
     UniqueAccess<StreamStatus> streamStatus_;
-    UniqueAccess<RoomModes> roomModes_;
+    UniqueAccess<RoomModes> roomModes;
+    bool disconnected_{};
+    std::optional<std::chrono::time_point<std::chrono::system_clock>>
+        lastConnectedAt_{};
     std::atomic_flag loadingRecentMessages_ = ATOMIC_FLAG_INIT;
     std::unordered_map<QString, std::weak_ptr<MessageThread>> threads_;
 
@@ -345,12 +403,17 @@ protected:
     Atomic<std::optional<EmotePtr>> ffzCustomModBadge_;
     Atomic<std::optional<EmotePtr>> ffzCustomVipBadge_;
 
+    FfzChannelBadgeMap ffzChannelBadges_;
+    ThreadGuard tgFfzChannelBadges_;
+
 private:
     // Badges
     UniqueAccess<std::map<QString, std::map<QString, EmotePtr>>>
         badgeSets_;  // "subscribers": { "0": ... "3": ... "6": ...
     UniqueAccess<std::vector<CheerEmoteSet>> cheerEmoteSets_;
     UniqueAccess<std::map<QString, ChannelPointReward>> channelPointRewards_;
+    boost::circular_buffer_space_optimized<QueuedRedemption>
+        waitingRedemptions_{MAX_QUEUED_REDEMPTIONS};
 
     bool mod_ = false;
     bool vip_ = false;
@@ -403,6 +466,7 @@ private:
     friend class TwitchIrcServer;
     friend class TwitchMessageBuilder;
     friend class IrcMessageHandler;
+    friend class Commands_E2E_Test;
 };
 
 }  // namespace chatterino

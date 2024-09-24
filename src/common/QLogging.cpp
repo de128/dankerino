@@ -11,7 +11,10 @@ Q_LOGGING_CATEGORY(chatterinoArgs, "chatterino.args", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoBenchmark, "chatterino.benchmark", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoBttv, "chatterino.bttv", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoCache, "chatterino.cache", logThreshold);
+Q_LOGGING_CATEGORY(chatterinoCommands, "chatterino.commands", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoCommon, "chatterino.common", logThreshold);
+Q_LOGGING_CATEGORY(chatterinoCrashhandler, "chatterino.crashhandler",
+                   logThreshold);
 Q_LOGGING_CATEGORY(chatterinoEmoji, "chatterino.emoji", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoEnv, "chatterino.env", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoFfzemotes, "chatterino.ffzemotes", logThreshold);
@@ -32,7 +35,7 @@ Q_LOGGING_CATEGORY(chatterinoNativeMessage, "chatterino.nativemessage",
 Q_LOGGING_CATEGORY(chatterinoNetwork, "chatterino.network", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoNotification, "chatterino.notification",
                    logThreshold);
-Q_LOGGING_CATEGORY(chatterinoNuulsuploader, "chatterino.nuulsuploader",
+Q_LOGGING_CATEGORY(chatterinoImageuploader, "chatterino.imageuploader",
                    logThreshold);
 Q_LOGGING_CATEGORY(chatterinoPubSub, "chatterino.pubsub", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoRecentMessages, "chatterino.recentmessages",

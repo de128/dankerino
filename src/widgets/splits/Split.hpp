@@ -2,12 +2,13 @@
 
 #include "common/Aliases.hpp"
 #include "common/Channel.hpp"
-#include "common/NullablePtr.hpp"
 #include "widgets/BaseWidget.hpp"
+#include "widgets/splits/SplitCommon.hpp"
 
 #include <boost/signals2.hpp>
 #include <pajlada/signals/signalholder.hpp>
 #include <QFont>
+#include <QPointer>
 #include <QShortcut>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -15,7 +16,6 @@
 namespace chatterino {
 
 class ChannelView;
-class MessageThread;
 class SplitHeader;
 class SplitInput;
 class SplitContainer;
@@ -75,7 +75,10 @@ public:
 
     void setContainer(SplitContainer *container);
 
-    void setInputReply(const std::shared_ptr<MessageThread> &reply);
+    void setInputReply(const MessagePtr &reply);
+
+    // This is called on window focus lost
+    void unpause();
 
     static pajlada::Signals::Signal<Qt::KeyboardModifiers>
         modifierStatusChanged;
@@ -96,8 +99,7 @@ public:
     pajlada::Signals::Signal<Action> actionRequested;
     pajlada::Signals::Signal<ChannelPtr> openSplitRequested;
 
-    // args: (SplitContainer::Direction dir, Split* parent)
-    pajlada::Signals::Signal<int, Split *> insertSplitRequested;
+    pajlada::Signals::Signal<SplitDirection, Split *> insertSplitRequested;
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -156,7 +158,7 @@ private:
     SplitInput *const input_;
     SplitOverlay *const overlay_;
 
-    NullablePtr<SelectChannelDialog> selectChannelDialog_;
+    QPointer<SelectChannelDialog> selectChannelDialog_;
 
     pajlada::Signals::Connection channelIDChangedConnection_;
     pajlada::Signals::Connection usermodeChangedConnection_;
@@ -187,7 +189,7 @@ public slots:
     void openWithCustomScheme();
     void setFiltersDialog();
     void showSearch(bool singleChannel);
-    void showViewerList();
+    void showChatterList();
     void openSubPage();
     void reloadChannelAndSubscriberEmotes();
     void reconnect();

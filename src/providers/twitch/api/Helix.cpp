@@ -1,22 +1,22 @@
 #include "providers/twitch/api/Helix.hpp"
 
 #include "common/Literals.hpp"
-#include "common/NetworkRequest.hpp"
-#include "common/NetworkResult.hpp"
-#include "common/Outcome.hpp"
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
 #include "util/CancellationToken.hpp"
+#include "util/QMagicEnum.hpp"
 
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <QJsonDocument>
 
 namespace {
 
 using namespace chatterino;
 
-static constexpr auto NUM_MODERATORS_TO_FETCH_PER_REQUEST = 100;
+constexpr auto NUM_MODERATORS_TO_FETCH_PER_REQUEST = 100;
 
-static constexpr auto NUM_CHATTERS_TO_FETCH = 1000;
+constexpr auto NUM_CHATTERS_TO_FETCH = 1000;
 
 }  // namespace
 
@@ -57,14 +57,14 @@ void Helix::fetchUsers(QStringList userIds, QStringList userLogins,
 
     // TODO: set on success and on error
     this->makeGet("users", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixUser> users;
@@ -75,8 +75,6 @@ void Helix::fetchUsers(QStringList userIds, QStringList userLogins,
             }
 
             successCallback(users);
-
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -138,15 +136,14 @@ void Helix::getChannelFollowers(
 
     // TODO: set on success and on error
     this->makeGet("channels/followers", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             if (root.empty())
             {
                 failureCallback("Bad JSON response");
-                return Failure;
+                return;
             }
             successCallback(HelixGetChannelFollowersResponse(root));
-            return Success;
         })
         .onError([failureCallback](auto result) {
             auto root = result.parseJson();
@@ -182,14 +179,14 @@ void Helix::fetchStreams(
 
     // TODO: set on success and on error
     this->makeGet("streams", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixStream> streams;
@@ -200,8 +197,6 @@ void Helix::fetchStreams(
             }
 
             successCallback(streams);
-
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -275,14 +270,14 @@ void Helix::fetchGames(QStringList gameIds, QStringList gameNames,
 
     // TODO: set on success and on error
     this->makeGet("games", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixGame> games;
@@ -293,8 +288,6 @@ void Helix::fetchGames(QStringList gameIds, QStringList gameNames,
             }
 
             successCallback(games);
-
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -311,14 +304,14 @@ void Helix::searchGames(QString gameName,
     urlQuery.addQueryItem("query", gameName);
 
     this->makeGet("search/categories", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixGame> games;
@@ -329,7 +322,6 @@ void Helix::searchGames(QString gameName,
             }
 
             successCallback(games);
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -358,12 +350,10 @@ void Helix::updateStreamTags(QString broadcasterId, QStringList tags,
     this->makeGet("streams/tags", urlQuery)
         .payload(data.toJson())
         .header("Content-Type", "application/json")
-        .onSuccess([successCallback,
-                    failureCallback](NetworkResult result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](NetworkResult result) {
             qCDebug(chatterinoCommon)
                 << "Update tags success: " << *result.status();
             successCallback();
-            return Success;
         })
         .onError([successCallback, failureCallback](NetworkResult result) {
             qCDebug(chatterinoCommon) << "Update tags fail: " << result.error();
@@ -379,15 +369,14 @@ void Helix::getStreamTags(QString broadcasterId,
     auto urlQuery = QUrlQuery();
     urlQuery.addQueryItem("broadcaster_id", broadcasterId);
     this->makeGet("streams/tags", urlQuery)
-        .onSuccess([successCallback,
-                    failureCallback](NetworkResult result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](NetworkResult result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixTag> tags;
@@ -398,7 +387,6 @@ void Helix::getStreamTags(QString broadcasterId,
             }
 
             successCallback(tags);
-            return Success;
         })
         .onError([failureCallback](NetworkResult result) {
             qCDebug(chatterinoCommon)
@@ -420,15 +408,14 @@ void Helix::fetchStreamTags(
     }
     urlQuery.addQueryItem("first", "100");
     this->makeGet("tags/streams", urlQuery)
-        .onSuccess([successCallback,
-                    failureCallback](NetworkResult result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](NetworkResult result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixTag> tags;
@@ -441,7 +428,6 @@ void Helix::fetchStreamTags(
             successCallback(
                 tags,
                 root.value("pagination").toObject().value("cursor").toString());
-            return Success;
         })
         .onError([failureCallback](NetworkResult result) {
             qCDebug(chatterinoCommon)
@@ -481,20 +467,19 @@ void Helix::createClip(QString channelId,
 
     this->makePost("clips", urlQuery)
         .header("Content-Type", "application/json")
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback(HelixClipError::Unknown);
-                return Failure;
+                return;
             }
 
             HelixClip clip(data.toArray()[0].toObject());
 
             successCallback(clip);
-            return Success;
         })
         .onError([failureCallback](auto result) {
             switch (result.status().value_or(0))
@@ -537,14 +522,14 @@ void Helix::fetchChannels(
     }
 
     this->makeGet("channels", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixChannel> channels;
@@ -555,7 +540,6 @@ void Helix::fetchChannels(
             }
 
             successCallback(channels);
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             failureCallback();
@@ -571,20 +555,19 @@ void Helix::getChannel(QString broadcasterId,
     urlQuery.addQueryItem("broadcaster_id", broadcasterId);
 
     this->makeGet("channels", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             HelixChannel channel(data.toArray()[0].toObject());
 
             successCallback(channel);
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             failureCallback();
@@ -607,20 +590,19 @@ void Helix::createStreamMarker(
 
     this->makePost("streams/markers", QUrlQuery())
         .json(payload)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback(HelixStreamMarkerError::Unknown);
-                return Failure;
+                return;
             }
 
             HelixStreamMarker streamMarker(data.toArray()[0].toObject());
 
             successCallback(streamMarker);
-            return Success;
         })
         .onError([failureCallback](NetworkResult result) {
             switch (result.status().value_or(0))
@@ -709,9 +691,8 @@ void Helix::blockUser(QString targetUserId, const QObject *caller,
 
     this->makePut("users/blocks", urlQuery)
         .caller(caller)
-        .onSuccess([successCallback](auto /*result*/) -> Outcome {
+        .onSuccess([successCallback](auto /*result*/) {
             successCallback();
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -729,9 +710,8 @@ void Helix::unblockUser(QString targetUserId, const QObject *caller,
 
     this->makeDelete("users/blocks", urlQuery)
         .caller(caller)
-        .onSuccess([successCallback](auto /*result*/) -> Outcome {
+        .onSuccess([successCallback](auto /*result*/) {
             successCallback();
-            return Success;
         })
         .onError([failureCallback](auto /*result*/) {
             // TODO: make better xd
@@ -740,11 +720,13 @@ void Helix::unblockUser(QString targetUserId, const QObject *caller,
         .execute();
 }
 
-void Helix::updateChannel(QString broadcasterId, QString gameId,
-                          QString language, QString title,
-                          std::function<void(NetworkResult)> successCallback,
-                          HelixFailureCallback failureCallback)
+void Helix::updateChannel(
+    QString broadcasterId, QString gameId, QString language, QString title,
+    std::function<void(NetworkResult)> successCallback,
+    FailureCallback<HelixUpdateChannelError, QString> failureCallback)
 {
+    using Error = HelixUpdateChannelError;
+
     QUrlQuery urlQuery;
     auto obj = QJsonObject();
     if (!gameId.isEmpty())
@@ -769,12 +751,65 @@ void Helix::updateChannel(QString broadcasterId, QString gameId,
     urlQuery.addQueryItem("broadcaster_id", broadcasterId);
     this->makePatch("channels", urlQuery)
         .json(obj)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             successCallback(result);
-            return Success;
         })
         .onError([failureCallback](NetworkResult result) {
-            failureCallback();
+            if (!result.status())
+            {
+                failureCallback(Error::Unknown, result.formatError());
+                return;
+            }
+
+            auto obj = result.parseJson();
+            auto message = obj.value("message").toString();
+
+            switch (*result.status())
+            {
+                case 401: {
+                    if (message.startsWith("Missing scope",
+                                           Qt::CaseInsensitive))
+                    {
+                        failureCallback(Error::UserMissingScope, message);
+                    }
+                    else if (message.compare(
+                                 "The ID in broadcaster_id must match the user "
+                                 "ID found in the request's OAuth token.",
+                                 Qt::CaseInsensitive) == 0)
+                    {
+                        failureCallback(Error::UserNotAuthorized, message);
+                    }
+                    else
+                    {
+                        failureCallback(Error::Forwarded, message);
+                    }
+                }
+                break;
+
+                case 400:
+                case 403: {
+                    failureCallback(Error::Forwarded, message);
+                }
+                break;
+
+                case 429: {
+                    failureCallback(Error::Ratelimited, message);
+                }
+                break;
+
+                case 500: {
+                    failureCallback(Error::Unknown, message);
+                }
+                break;
+
+                default: {
+                    qCDebug(chatterinoTwitch)
+                        << "Helix update channel, unhandled error data:"
+                        << result.formatError() << result.getData() << obj;
+                    failureCallback(Error::Unknown, message);
+                }
+                break;
+            }
         })
         .execute();
 }
@@ -792,9 +827,8 @@ void Helix::manageAutoModMessages(
 
     this->makePost("moderation/automod/message", QUrlQuery())
         .json(payload)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             successCallback();
-            return Success;
         })
         .onError([failureCallback, msgID, action](NetworkResult result) {
             switch (result.status().value_or(0))
@@ -848,14 +882,14 @@ void Helix::getCheermotes(
     urlQuery.addQueryItem("broadcaster_id", broadcasterId);
 
     this->makeGet("bits/cheermotes", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixCheermoteSet> cheermoteSets;
@@ -866,7 +900,6 @@ void Helix::getCheermotes(
             }
 
             successCallback(cheermoteSets);
-            return Success;
         })
         .onError([broadcasterId, failureCallback](NetworkResult result) {
             qCDebug(chatterinoTwitch)
@@ -886,21 +919,19 @@ void Helix::getEmoteSetData(QString emoteSetId,
     urlQuery.addQueryItem("emote_set_id", emoteSetId);
 
     this->makeGet("chat/emotes/set", urlQuery)
-        .onSuccess([successCallback, failureCallback,
-                    emoteSetId](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback, emoteSetId](auto result) {
             QJsonObject root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray() || data.toArray().isEmpty())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             HelixEmoteSetData emoteSetData(data.toArray()[0].toObject());
 
             successCallback(emoteSetData);
-            return Success;
         })
         .onError([failureCallback](NetworkResult result) {
             // TODO: make better xd
@@ -918,15 +949,14 @@ void Helix::getChannelEmotes(
     urlQuery.addQueryItem("broadcaster_id", broadcasterId);
 
     this->makeGet("chat/emotes", urlQuery)
-        .onSuccess([successCallback,
-                    failureCallback](NetworkResult result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](NetworkResult result) {
             QJsonObject root = result.parseJson();
             auto data = root.value("data");
 
             if (!data.isArray())
             {
                 failureCallback();
-                return Failure;
+                return;
             }
 
             std::vector<HelixChannelEmote> channelEmotes;
@@ -937,7 +967,6 @@ void Helix::getChannelEmotes(
             }
 
             successCallback(channelEmotes);
-            return Success;
         })
         .onError([failureCallback](auto result) {
             // TODO: make better xd
@@ -959,7 +988,7 @@ void Helix::updateUserChatColor(
 
     this->makePut("chat/color", QUrlQuery())
         .json(payload)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto obj = result.parseJson();
             if (result.status() != 204)
             {
@@ -970,7 +999,6 @@ void Helix::updateUserChatColor(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1043,7 +1071,7 @@ void Helix::deleteChatMessages(
     }
 
     this->makeDelete("moderation/chat", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1053,7 +1081,6 @@ void Helix::deleteChatMessages(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1128,7 +1155,7 @@ void Helix::addChannelModerator(
     urlQuery.addQueryItem("user_id", userID);
 
     this->makePost("moderation/moderators", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1138,7 +1165,6 @@ void Helix::addChannelModerator(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1223,7 +1249,7 @@ void Helix::removeChannelModerator(
     urlQuery.addQueryItem("user_id", userID);
 
     this->makeDelete("moderation/moderators", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1233,7 +1259,6 @@ void Helix::removeChannelModerator(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1311,13 +1336,11 @@ void Helix::sendChatAnnouncement(
 
     QJsonObject body;
     body.insert("message", message);
-    const auto colorStr =
-        std::string{magic_enum::enum_name<HelixAnnouncementColor>(color)};
-    body.insert("color", QString::fromStdString(colorStr).toLower());
+    body.insert("color", qmagicenum::enumNameString(color).toLower());
 
     this->makePost("chat/announcements", urlQuery)
         .json(body)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1327,7 +1350,6 @@ void Helix::sendChatAnnouncement(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1393,7 +1415,7 @@ void Helix::addChannelVIP(
     urlQuery.addQueryItem("user_id", userID);
 
     this->makePost("channels/vips", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1403,7 +1425,6 @@ void Helix::addChannelVIP(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1478,7 +1499,7 @@ void Helix::removeChannelVIP(
     urlQuery.addQueryItem("user_id", userID);
 
     this->makeDelete("channels/vips", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1488,7 +1509,6 @@ void Helix::removeChannelVIP(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1550,16 +1570,6 @@ void Helix::removeChannelVIP(
         .execute();
 }
 
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
 void Helix::unbanUser(
     QString broadcasterID, QString moderatorID, QString userID,
     ResultCallback<> successCallback,
@@ -1574,7 +1584,7 @@ void Helix::unbanUser(
     urlQuery.addQueryItem("user_id", userID);
 
     this->makeDelete("moderation/bans", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1584,7 +1594,6 @@ void Helix::unbanUser(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1660,18 +1669,7 @@ void Helix::unbanUser(
             }
         })
         .execute();
-}  // These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
-// These changes are from the helix-command-migration/unban-untimeout branch
+}
 
 void Helix::startRaid(
     QString fromBroadcasterID, QString toBroadcasterID,
@@ -1686,11 +1684,9 @@ void Helix::startRaid(
     urlQuery.addQueryItem("to_broadcaster_id", toBroadcasterID);
 
     this->makePost("raids", urlQuery)
-        .onSuccess(
-            [successCallback, failureCallback](auto /*result*/) -> Outcome {
-                successCallback();
-                return Success;
-            })
+        .onSuccess([successCallback, failureCallback](auto /*result*/) {
+            successCallback();
+        })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
             {
@@ -1772,7 +1768,7 @@ void Helix::cancelRaid(
     urlQuery.addQueryItem("broadcaster_id", broadcasterID);
 
     this->makeDelete("raids", urlQuery)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -1782,7 +1778,6 @@ void Helix::cancelRaid(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -1940,7 +1935,7 @@ void Helix::updateChatSettings(
 
     this->makePatch("chat/settings", urlQuery)
         .json(payload)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -1950,7 +1945,6 @@ void Helix::updateChatSettings(
             auto response = result.parseJson();
             successCallback(HelixChatSettings(
                 response.value("data").toArray().first().toObject()));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2069,7 +2063,7 @@ void Helix::fetchChatters(
     }
 
     this->makeGet("chat/chatters", urlQuery)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2079,7 +2073,6 @@ void Helix::fetchChatters(
 
             auto response = result.parseJson();
             successCallback(HelixChatters(response));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2184,7 +2177,7 @@ void Helix::fetchModerators(
     }
 
     this->makeGet("moderation/moderators", urlQuery)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2194,7 +2187,6 @@ void Helix::fetchModerators(
 
             auto response = result.parseJson();
             successCallback(HelixModerators(response));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2276,7 +2268,7 @@ void Helix::banUser(QString broadcasterID, QString moderatorID, QString userID,
 
     this->makePost("moderation/bans", urlQuery)
         .json(payload)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2285,7 +2277,6 @@ void Helix::banUser(QString broadcasterID, QString moderatorID, QString userID,
             }
             // we don't care about the response
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2361,6 +2352,107 @@ void Helix::banUser(QString broadcasterID, QString moderatorID, QString userID,
         .execute();
 }
 
+// Warn a user
+// https://dev.twitch.tv/docs/api/reference#warn-chat-user
+void Helix::warnUser(
+    QString broadcasterID, QString moderatorID, QString userID, QString reason,
+    ResultCallback<> successCallback,
+    FailureCallback<HelixWarnUserError, QString> failureCallback)
+{
+    using Error = HelixWarnUserError;
+
+    QUrlQuery urlQuery;
+
+    urlQuery.addQueryItem("broadcaster_id", broadcasterID);
+    urlQuery.addQueryItem("moderator_id", moderatorID);
+
+    QJsonObject payload;
+    {
+        QJsonObject data;
+        data["reason"] = reason;
+        data["user_id"] = userID;
+
+        payload["data"] = data;
+    }
+
+    this->makePost("moderation/warnings", urlQuery)
+        .json(payload)
+        .onSuccess([successCallback](auto result) {
+            if (result.status() != 200)
+            {
+                qCWarning(chatterinoTwitch)
+                    << "Success result for warning a user was"
+                    << result.formatError() << "but we expected it to be 200";
+            }
+            // we don't care about the response
+            successCallback();
+        })
+        .onError([failureCallback](const auto &result) -> void {
+            if (!result.status())
+            {
+                failureCallback(Error::Unknown, result.formatError());
+                return;
+            }
+
+            auto obj = result.parseJson();
+            auto message = obj.value("message").toString();
+
+            switch (*result.status())
+            {
+                case 400: {
+                    if (message.startsWith("The user specified in the user_id "
+                                           "field may not be warned",
+                                           Qt::CaseInsensitive))
+                    {
+                        failureCallback(Error::CannotWarnUser, message);
+                    }
+                    else
+                    {
+                        failureCallback(Error::Forwarded, message);
+                    }
+                }
+                break;
+
+                case 401: {
+                    if (message.startsWith("Missing scope",
+                                           Qt::CaseInsensitive))
+                    {
+                        failureCallback(Error::UserMissingScope, message);
+                    }
+                    else
+                    {
+                        failureCallback(Error::Forwarded, message);
+                    }
+                }
+                break;
+
+                case 403: {
+                    failureCallback(Error::UserNotAuthorized, message);
+                }
+                break;
+
+                case 409: {
+                    failureCallback(Error::ConflictingOperation, message);
+                }
+                break;
+
+                case 429: {
+                    failureCallback(Error::Ratelimited, message);
+                }
+                break;
+
+                default: {
+                    qCDebug(chatterinoTwitch)
+                        << "Unhandled error warning user:"
+                        << result.formatError() << result.getData() << obj;
+                    failureCallback(Error::Unknown, message);
+                }
+                break;
+            }
+        })
+        .execute();
+}
+
 // https://dev.twitch.tv/docs/api/reference#send-whisper
 void Helix::sendWhisper(
     QString fromUserID, QString toUserID, QString message,
@@ -2379,7 +2471,7 @@ void Helix::sendWhisper(
 
     this->makePost("whispers", urlQuery)
         .json(payload)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -2388,7 +2480,6 @@ void Helix::sendWhisper(
             }
             // we don't care about the response
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2528,7 +2619,7 @@ void Helix::getChannelVIPs(
 
     this->makeGet("channels/vips", urlQuery)
         .header("Content-Type", "application/json")
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2545,7 +2636,6 @@ void Helix::getChannelVIPs(
             }
 
             successCallback(channelVips);
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2621,18 +2711,17 @@ void Helix::startCommercial(
 
     this->makePost("channels/commercial", QUrlQuery())
         .json(payload)
-        .onSuccess([successCallback, failureCallback](auto result) -> Outcome {
+        .onSuccess([successCallback, failureCallback](auto result) {
             auto obj = result.parseJson();
             if (obj.isEmpty())
             {
                 failureCallback(
                     Error::Unknown,
                     "Twitch didn't send any information about this error.");
-                return Failure;
+                return;
             }
 
             successCallback(HelixStartCommercialResponse(obj));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2717,7 +2806,7 @@ void Helix::getGlobalBadges(
     using Error = HelixGetGlobalBadgesError;
 
     this->makeGet("chat/badges/global", QUrlQuery())
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2727,7 +2816,6 @@ void Helix::getGlobalBadges(
 
             auto response = result.parseJson();
             successCallback(HelixGlobalBadges(response));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2770,7 +2858,7 @@ void Helix::getChannelBadges(
     urlQuery.addQueryItem("broadcaster_id", broadcasterID);
 
     this->makeGet("chat/badges", urlQuery)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2780,7 +2868,6 @@ void Helix::getChannelBadges(
 
             auto response = result.parseJson();
             successCallback(HelixChannelBadges(response));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2829,7 +2916,7 @@ void Helix::updateShieldMode(
 
     this->makePut("moderation/shield_mode", urlQuery)
         .json(payload)
-        .onSuccess([successCallback](auto result) -> Outcome {
+        .onSuccess([successCallback](auto result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -2840,7 +2927,6 @@ void Helix::updateShieldMode(
             const auto response = result.parseJson();
             successCallback(
                 HelixShieldModeStatus(response["data"][0].toObject()));
-            return Success;
         })
         .onError([failureCallback](const auto &result) -> void {
             if (!result.status())
@@ -2859,8 +2945,12 @@ void Helix::updateShieldMode(
                                            Qt::CaseInsensitive))
                     {
                         failureCallback(Error::UserMissingScope, message);
+                        break;
                     }
+
+                    failureCallback(Error::Forwarded, message);
                 }
+                break;
                 case 401: {
                     failureCallback(Error::Forwarded, message);
                 }
@@ -2902,7 +2992,7 @@ void Helix::sendShoutout(
 
     this->makePost("chat/shoutouts", urlQuery)
         .header("Content-Type", "application/json")
-        .onSuccess([successCallback](NetworkResult result) -> Outcome {
+        .onSuccess([successCallback](NetworkResult result) {
             if (result.status() != 204)
             {
                 qCWarning(chatterinoTwitch)
@@ -2911,7 +3001,6 @@ void Helix::sendShoutout(
             }
 
             successCallback();
-            return Success;
         })
         .onError([failureCallback](const NetworkResult &result) -> void {
             if (!result.status())
@@ -2993,6 +3082,94 @@ void Helix::sendShoutout(
         .execute();
 }
 
+// https://dev.twitch.tv/docs/api/reference/#send-chat-message
+void Helix::sendChatMessage(
+    HelixSendMessageArgs args, ResultCallback<HelixSentMessage> successCallback,
+    FailureCallback<HelixSendMessageError, QString> failureCallback)
+{
+    using Error = HelixSendMessageError;
+
+    QJsonObject json{{
+        {"broadcaster_id", args.broadcasterID},
+        {"sender_id", args.senderID},
+        {"message", args.message},
+    }};
+    if (!args.replyParentMessageID.isEmpty())
+    {
+        json["reply_parent_message_id"] = args.replyParentMessageID;
+    }
+
+    this->makePost("chat/messages", {})
+        .json(json)
+        .onSuccess([successCallback](const NetworkResult &result) {
+            if (result.status() != 200)
+            {
+                qCWarning(chatterinoTwitch)
+                    << "Success result for sending chat message was "
+                    << result.formatError() << "but we expected it to be 200";
+            }
+            auto json = result.parseJson();
+
+            successCallback(HelixSentMessage(
+                json.value("data").toArray().at(0).toObject()));
+        })
+        .onError([failureCallback](const NetworkResult &result) -> void {
+            if (!result.status())
+            {
+                failureCallback(Error::Unknown, result.formatError());
+                return;
+            }
+
+            const auto obj = result.parseJson();
+            auto message =
+                obj["message"].toString(u"Twitch internal server error"_s);
+
+            switch (*result.status())
+            {
+                case 400: {
+                    failureCallback(Error::Unknown, message);
+                }
+                break;
+
+                case 401: {
+                    if (message.startsWith("User access token requires the",
+                                           Qt::CaseInsensitive))
+                    {
+                        failureCallback(Error::UserMissingScope, message);
+                    }
+                    else
+                    {
+                        failureCallback(Error::Forwarded, message);
+                    }
+                }
+                break;
+
+                case 403: {
+                    failureCallback(Error::Forbidden, message);
+                }
+                break;
+
+                case 422: {
+                    failureCallback(Error::MessageTooLarge, message);
+                }
+                break;
+
+                case 500: {
+                    failureCallback(Error::Unknown, message);
+                }
+                break;
+
+                default: {
+                    qCWarning(chatterinoTwitch)
+                        << "Helix send chat message, unhandled error data:"
+                        << result.formatError() << result.getData() << obj;
+                    failureCallback(Error::Unknown, message);
+                }
+            }
+        })
+        .execute();
+}
+
 NetworkRequest Helix::makeRequest(const QString &url, const QUrlQuery &urlQuery,
                                   NetworkRequestType type)
 {
@@ -3056,33 +3233,33 @@ void Helix::paginate(const QString &url, const QUrlQuery &baseQuery,
                      CancellationToken &&cancellationToken)
 {
     auto onSuccess =
-        std::make_shared<std::function<Outcome(NetworkResult)>>(nullptr);
+        std::make_shared<std::function<void(NetworkResult)>>(nullptr);
     // This is the actual callback passed to NetworkRequest.
     // It wraps the shared-ptr.
-    auto onSuccessCb = [onSuccess](const auto &res) -> Outcome {
+    auto onSuccessCb = [onSuccess](const auto &res) {
         return (*onSuccess)(res);
     };
 
     *onSuccess = [this, onPage = std::move(onPage), onError, onSuccessCb,
                   url{url}, baseQuery{baseQuery},
-                  cancellationToken = std::move(cancellationToken)](
-                     const NetworkResult &res) -> Outcome {
+                  cancellationToken =
+                      std::move(cancellationToken)](const NetworkResult &res) {
         if (cancellationToken.isCancelled())
         {
-            return Success;
+            return;
         }
 
         const auto json = res.parseJson();
         if (!onPage(json))
         {
             // The consumer doesn't want any more pages
-            return Success;
+            return;
         }
 
         auto cursor = json["pagination"_L1]["cursor"_L1].toString();
         if (cursor.isEmpty())
         {
-            return Success;
+            return;
         }
 
         auto query = baseQuery;
@@ -3093,8 +3270,6 @@ void Helix::paginate(const QString &url, const QUrlQuery &baseQuery,
             .onSuccess(onSuccessCb)
             .onError(onError)
             .execute();
-
-        return Success;
     };
 
     this->makeGet(url, baseQuery)

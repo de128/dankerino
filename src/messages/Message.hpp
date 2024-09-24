@@ -1,8 +1,10 @@
 #pragma once
 
 #include "common/FlagsEnum.hpp"
+#include "providers/twitch/ChannelPointReward.hpp"
 #include "util/QStringHash.hpp"
 
+#include <magic_enum/magic_enum.hpp>
 #include <QColor>
 #include <QTime>
 
@@ -50,11 +52,24 @@ enum class MessageFlag : int64_t {
     LiveUpdatesAdd = (1LL << 28),
     LiveUpdatesRemove = (1LL << 29),
     LiveUpdatesUpdate = (1LL << 30),
-    WebchatDetected = (1LL << 31),
+    /// The header of a message caught by AutoMod containing allow/disallow
+    AutoModOffendingMessageHeader = (1LL << 31),
+    /// The message caught by AutoMod containing the user who sent the message & its contents
+    AutoModOffendingMessage = (1LL << 32),
+    LowTrustUsers = (1LL << 33),
+    /// The message is sent by a user marked as restricted with Twitch's "Low Trust"/"Suspicious User" feature
+    RestrictedMessage = (1LL << 34),
+    /// The message is sent by a user marked as monitor with Twitch's "Low Trust"/"Suspicious User" feature
+    MonitoredMessage = (1LL << 35),
+    /// The message is an ACTION message (/me)
+    Action = (1LL << 36),
+    WebchatDetected = (1LL << 37),
 };
 
 using MessageFlags = FlagsEnum<MessageFlag>;
 
+struct Message;
+using MessagePtr = std::shared_ptr<const Message>;
 struct Message {
     Message();
     ~Message();
@@ -90,12 +105,18 @@ struct Message {
     // the reply thread will be cleaned up by the TwitchChannel.
     // The root of the thread does not have replyThread set.
     std::shared_ptr<MessageThread> replyThread;
+    MessagePtr replyParent;
     uint32_t count = 1;
     std::vector<std::unique_ptr<MessageElement>> elements;
 
     ScrollbarHighlight getScrollBarHighlight() const;
+
+    std::shared_ptr<ChannelPointReward> reward = nullptr;
 };
 
-using MessagePtr = std::shared_ptr<const Message>;
-
 }  // namespace chatterino
+
+template <>
+struct magic_enum::customize::enum_range<chatterino::MessageFlag> {
+    static constexpr bool is_flags = true;
+};

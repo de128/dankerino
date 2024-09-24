@@ -1,5 +1,6 @@
 #pragma once
 
+#include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
 
 #include <QHBoxLayout>
@@ -19,7 +20,7 @@ class Split;
 class EmotePopup;
 class InputCompletionPopup;
 class EffectLabel;
-class MessageThread;
+class MessageView;
 class ResizingTextEdit;
 class ChannelView;
 enum class CompletionKind;
@@ -40,8 +41,7 @@ public:
     QString getInputText() const;
     void insertText(const QString &text);
 
-    void setReply(std::shared_ptr<MessageThread> reply,
-                  bool showInlineReplying = true);
+    void setReply(MessagePtr target);
     void setPlaceholderText(const QString &text);
 
     /**
@@ -67,6 +67,13 @@ public:
      **/
     bool isHidden() const;
 
+    /**
+     * @brief Sets the text of this input
+     *
+     * This method should only be used in tests
+     */
+    void setInputText(const QString &newInputText);
+
     pajlada::Signals::Signal<const QString &> textChanged;
     pajlada::Signals::NoArgSignal selectionChanged;
 
@@ -81,14 +88,13 @@ protected:
 
     virtual void giveFocus(Qt::FocusReason reason);
 
-    QString handleSendMessage(std::vector<QString> &arguments);
+    QString handleSendMessage(const std::vector<QString> &arguments);
     void postMessageSend(const QString &message,
                          const std::vector<QString> &arguments);
 
-    /// Clears the input box, clears reply thread if inline replies are enabled
+    /// Clears the input box, clears reply target if inline replies are enabled
     void clearInput();
 
-protected:
     void addShortcuts() override;
     void initLayout();
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -104,6 +110,7 @@ protected:
     void hideCompletionPopup();
     void insertCompletionText(const QString &input_) const;
     void openEmotePopup();
+    void clearReplyTarget();
 
     void updateCancelReplyButton();
 
@@ -115,27 +122,35 @@ protected:
     // the user's setting is set to Prevent, and the given text goes beyond the Twitch message length limit
     bool shouldPreventInput(const QString &text) const;
 
+    int marginForTheme() const;
+
     Split *const split_;
     ChannelView *const channelView_;
     QPointer<EmotePopup> emotePopup_;
     QPointer<InputCompletionPopup> inputCompletionPopup_;
 
     struct {
+        // vbox for all components
+        QVBoxLayout *vbox;
+
+        // reply widgets
+        QWidget *replyWrapper;
+        QVBoxLayout *replyVbox;
+        QHBoxLayout *replyHbox;
+        MessageView *replyMessage;
+        QLabel *replyLabel;
+        EffectLabel *cancelReplyButton;
+
+        // input widgets
+        QWidget *inputWrapper;
+        QHBoxLayout *inputHbox;
         ResizingTextEdit *textEdit;
         QLabel *textEditLength;
         EffectLabel *sendButton;
         EffectLabel *emoteButton;
+    } ui_;
 
-        QHBoxLayout *hbox;
-        QVBoxLayout *vbox;
-
-        QWidget *replyWrapper;
-        QHBoxLayout *replyHbox;
-        QLabel *replyLabel;
-        EffectLabel *cancelReplyButton;
-    } ui_{};
-
-    std::shared_ptr<MessageThread> replyThread_ = nullptr;
+    MessagePtr replyTarget_ = nullptr;
     bool enableInlineReplying_;
 
     pajlada::Signals::SignalHolder managedConnections_;

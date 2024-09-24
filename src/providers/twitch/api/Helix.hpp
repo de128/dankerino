@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common/Aliases.hpp"
-#include "common/NetworkRequest.hpp"
+#include "common/network/NetworkRequest.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
 #include "util/Helpers.hpp"
 #include "util/QStringHash.hpp"
@@ -69,6 +69,9 @@ struct HelixStream {
     QString language;
     QString thumbnailUrl;
 
+    // This is the names, the IDs are now always empty
+    std::vector<QString> tags;
+
     HelixStream()
         : id("")
         , userId("")
@@ -99,6 +102,11 @@ struct HelixStream {
         , language(jsonObject.value("language").toString())
         , thumbnailUrl(jsonObject.value("thumbnail_url").toString())
     {
+        const auto jsonTags = jsonObject.value("tags").toArray();
+        for (const auto &tag : jsonTags)
+        {
+            this->tags.push_back(tag.toString());
+        }
     }
 };
 
@@ -425,6 +433,41 @@ struct HelixGlobalBadges {
 
 using HelixChannelBadges = HelixGlobalBadges;
 
+struct HelixDropReason {
+    QString code;
+    QString message;
+
+    explicit HelixDropReason(const QJsonObject &jsonObject)
+        : code(jsonObject["code"].toString())
+        , message(jsonObject["message"].toString())
+    {
+    }
+};
+
+struct HelixSentMessage {
+    QString id;
+    bool isSent;
+    std::optional<HelixDropReason> dropReason;
+
+    explicit HelixSentMessage(const QJsonObject &jsonObject)
+        : id(jsonObject["message_id"].toString())
+        , isSent(jsonObject["is_sent"].toBool())
+        , dropReason(jsonObject.contains("drop_reason")
+                         ? std::optional(HelixDropReason(
+                               jsonObject["drop_reason"].toObject()))
+                         : std::nullopt)
+    {
+    }
+};
+
+struct HelixSendMessageArgs {
+    QString broadcasterID;
+    QString senderID;
+    QString message;
+    /// Optional
+    QString replyParentMessageID;
+};
+
 enum class HelixAnnouncementColor {
     Blue,
     Green,
@@ -573,6 +616,19 @@ enum class HelixUpdateChatSettingsError {  // update chat settings
     Forwarded,
 };  // update chat settings
 
+/// Error type for Helix::updateChannel
+///
+/// Used in the /settitle and /setgame commands
+enum class HelixUpdateChannelError {
+    Unknown,
+    UserMissingScope,
+    UserNotAuthorized,
+    Ratelimited,
+
+    // The error message is forwarded directly from the Twitch API
+    Forwarded,
+};
+
 enum class HelixBanUserError {  // /timeout, /ban
     Unknown,
     UserMissingScope,
@@ -585,6 +641,18 @@ enum class HelixBanUserError {  // /timeout, /ban
     // The error message is forwarded directly from the Twitch API
     Forwarded,
 };  // /timeout, /ban
+
+enum class HelixWarnUserError {  // /warn
+    Unknown,
+    UserMissingScope,
+    UserNotAuthorized,
+    Ratelimited,
+    ConflictingOperation,
+    CannotWarnUser,
+
+    // The error message is forwarded directly from the Twitch API
+    Forwarded,
+};  // /warn
 
 enum class HelixWhisperError {  // /w
     Unknown,
@@ -704,6 +772,19 @@ enum class HelixStartCommercialError {
 
 enum class HelixGetGlobalBadgesError {
     Unknown,
+
+    // The error message is forwarded directly from the Twitch API
+    Forwarded,
+};
+
+enum class HelixSendMessageError {
+    Unknown,
+
+    MissingText,
+    BadRequest,
+    Forbidden,
+    MessageTooLarge,
+    UserMissingScope,
 
     // The error message is forwarded directly from the Twitch API
     Forwarded,
@@ -841,7 +922,7 @@ public:
     virtual void updateChannel(
         QString broadcasterId, QString gameId, QString language, QString title,
         std::function<void(NetworkResult)> successCallback,
-        HelixFailureCallback failureCallback) = 0;
+        FailureCallback<HelixUpdateChannelError, QString> failureCallback) = 0;
 
     // https://dev.twitch.tv/docs/api/reference#manage-held-automod-messages
     virtual void manageAutoModMessages(
@@ -990,6 +1071,13 @@ public:
         ResultCallback<> successCallback,
         FailureCallback<HelixBanUserError, QString> failureCallback) = 0;
 
+    // Warn a user
+    // https://dev.twitch.tv/docs/api/reference#warn-chat-user
+    virtual void warnUser(
+        QString broadcasterID, QString moderatorID, QString userID,
+        QString reason, ResultCallback<> successCallback,
+        FailureCallback<HelixWarnUserError, QString> failureCallback) = 0;
+
     // Send a whisper
     // https://dev.twitch.tv/docs/api/reference#send-whisper
     virtual void sendWhisper(
@@ -1053,6 +1141,12 @@ public:
         QString fromBroadcasterID, QString toBroadcasterID, QString moderatorID,
         ResultCallback<> successCallback,
         FailureCallback<HelixSendShoutoutError, QString> failureCallback) = 0;
+
+    /// https://dev.twitch.tv/docs/api/reference/#send-chat-message
+    virtual void sendChatMessage(
+        HelixSendMessageArgs args,
+        ResultCallback<HelixSentMessage> successCallback,
+        FailureCallback<HelixSendMessageError, QString> failureCallback) = 0;
 
     virtual void update(QString clientId, QString oauthToken) = 0;
 
@@ -1172,7 +1266,8 @@ public:
     void updateChannel(QString broadcasterId, QString gameId, QString language,
                        QString title,
                        std::function<void(NetworkResult)> successCallback,
-                       HelixFailureCallback failureCallback) final;
+                       FailureCallback<HelixUpdateChannelError, QString>
+                           failureCallback) final;
 
     // https://dev.twitch.tv/docs/api/reference#manage-held-automod-messages
     void manageAutoModMessages(
@@ -1321,6 +1416,13 @@ public:
         ResultCallback<> successCallback,
         FailureCallback<HelixBanUserError, QString> failureCallback) final;
 
+    // Warn a user
+    // https://dev.twitch.tv/docs/api/reference#warn-chat-user
+    void warnUser(
+        QString broadcasterID, QString moderatorID, QString userID,
+        QString reason, ResultCallback<> successCallback,
+        FailureCallback<HelixWarnUserError, QString> failureCallback) final;
+
     // Send a whisper
     // https://dev.twitch.tv/docs/api/reference#send-whisper
     void sendWhisper(
@@ -1383,6 +1485,12 @@ public:
         QString fromBroadcasterID, QString toBroadcasterID, QString moderatorID,
         ResultCallback<> successCallback,
         FailureCallback<HelixSendShoutoutError, QString> failureCallback) final;
+
+    /// https://dev.twitch.tv/docs/api/reference/#send-chat-message
+    void sendChatMessage(
+        HelixSendMessageArgs args,
+        ResultCallback<HelixSentMessage> successCallback,
+        FailureCallback<HelixSendMessageError, QString> failureCallback) final;
 
     void update(QString clientId, QString oauthToken) final;
 
